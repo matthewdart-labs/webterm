@@ -1,0 +1,54 @@
+# Canonical multi-session webterm compose example.
+#
+# Run with:
+#   docker compose -f prod.compose.yaml up -d
+#
+# Then open http://localhost:8080. The dashboard is populated by Docker watch
+# labels on the lightweight tag containers below. Each tile attaches to a
+# persistent tmux session inside the target container.
+
+services:
+  webterm:
+    image: ghcr.io/rcarmo/webterm:latest
+    container_name: webterm
+    restart: unless-stopped
+    command: ["--docker-watch"]
+    environment:
+      TZ: Europe/Lisbon
+      DOCKER_HOST: unix:///var/run/docker.sock
+      # Used only by containers labeled with webterm-command=auto.
+      WEBTERM_DOCKER_AUTO_COMMAND: tmux new-session -ADs {container}
+    ports:
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  # Tag containers are inert dashboard entries. They avoid relabeling or
+  # recreating existing services while still letting --docker-watch discover
+  # stable tiles. Replace target container names/commands for your stack.
+  webterm-tag-app:
+    image: alpine:3.21
+    container_name: webterm-tag-app
+    restart: unless-stopped
+    command: ["tail", "-f", "/dev/null"]
+    labels:
+      webterm-command: docker exec -it app sh -lc 'stty -echo 2>/dev/null || true; exec tmux new-session -ADs app'
+      webterm-theme: tokyo
+
+  webterm-tag-worker:
+    image: alpine:3.21
+    container_name: webterm-tag-worker
+    restart: unless-stopped
+    command: ["tail", "-f", "/dev/null"]
+    labels:
+      webterm-command: docker exec -it worker sh -lc 'stty -echo 2>/dev/null || true; exec tmux new-session -ADs worker'
+      webterm-theme: nord
+
+  webterm-tag-shell:
+    image: alpine:3.21
+    container_name: webterm-tag-shell
+    restart: unless-stopped
+    command: ["tail", "-f", "/dev/null"]
+    labels:
+      webterm-command: docker exec -it shell sh -lc 'stty -echo 2>/dev/null || true; exec tmux new-session -ADs shell'
+      webterm-theme: gotham

@@ -103,6 +103,17 @@ go run ./cmd/webterm -- --compose-manifest ./prod.compose.yaml
 - `WEBTERM_SCREENSHOT_MODE`: screenshot format for dashboard thumbnails (`png` default, set `svg` to use SVG)
 - `DOCKER_HOST`: Docker daemon endpoint override
 
+## Security
+
+**webterm grants interactive shell access and has no built-in authentication.** Any client that can reach the HTTP port can open a terminal session into your configured containers or host shell. Never expose it directly to an untrusted network.
+
+### Baseline hardening checklist
+
+- **Bind to loopback**: use `127.0.0.1:8080:8080` in compose/run (the canonical `prod.compose.yaml` does this by default) and put a reverse proxy with authentication in front — Nginx + OAuth2 Proxy, Authelia, Traefik ForwardAuth, or a Tailscale serve/ACL rule.
+- **Docker socket scope**: the raw Docker socket (`/var/run/docker.sock`) grants root-equivalent host access. Restricting the Docker API endpoints available to webterm is strongly recommended for production. See the commented "Least-privilege socket proxy" section in `prod.compose.yaml` for what this would look like and for the current implementation blocker (exec requires a Unix-socket HTTP Upgrade that standard TCP-based socket proxies cannot proxy without changes to webterm).
+- **Container isolation**: webterm containers that run `docker exec` into sibling containers can inherit those containers' filesystem and capabilities. Run target containers with minimal privileges (`--cap-drop ALL`, `--read-only`, non-root users).
+- **TLS**: if you deploy behind a reverse proxy, terminate TLS at the proxy. Webterm itself does not provide TLS.
+
 ## Development (Makefile-first)
 
 ```bash

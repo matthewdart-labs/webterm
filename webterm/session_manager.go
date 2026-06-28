@@ -85,6 +85,31 @@ func (m *SessionManager) AddApp(name, command, slug string, terminal bool, theme
 	return slug
 }
 
+// UpdateApp refreshes an existing app's display name and theme in place,
+// without disturbing any live session bound to its slug. Returns false if no
+// app with the slug exists. Used by the tmux watcher when a window is renamed,
+// renumbered, or re-themed (its id-keyed command stays valid, only the label
+// and theme move).
+func (m *SessionManager) UpdateApp(slug, name, theme string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	app, ok := m.appsBySlug[slug]
+	if !ok {
+		return false
+	}
+	app.Name = name
+	app.Theme = theme
+	m.appsBySlug[slug] = app
+	for i := range m.apps {
+		if m.apps[i].Slug == slug {
+			m.apps[i].Name = name
+			m.apps[i].Theme = theme
+			break
+		}
+	}
+	return true
+}
+
 func (m *SessionManager) RemoveApp(slug string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

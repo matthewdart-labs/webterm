@@ -17,6 +17,7 @@ var ThemeBackgrounds = map[string]string{
 	"miasma":     "#222222",
 	"github":     "#1c2128",
 	"gotham":     "#0c1014",
+	"md":         "#1b1c1e",
 }
 
 var ThemePalettes = map[string]map[string]string{
@@ -339,5 +340,27 @@ var ThemePalettes = map[string]map[string]string{
 		"brightmagenta": "#bb9af7",
 		"brightcyan":    "#7dcfff",
 		"brightwhite":   "#c0caf5",
+	},
+	// md — "Architectural Editorial" (dark), Matthew Dart personal brand.
+	// Source: handbook md-brand / OneDrive Personal Brand/terminal-theme.
+	"md": {
+		"background":    "#1b1c1e",
+		"foreground":    "#f0ede6",
+		"black":         "#242628",
+		"red":           "#c96f4a",
+		"green":         "#8a9b7a",
+		"yellow":        "#c4a84f",
+		"blue":          "#7c99a8",
+		"magenta":       "#af7497",
+		"cyan":          "#6e9e96",
+		"white":         "#e8e1d4",
+		"brightblack":   "#767a80",
+		"brightred":     "#e08a63",
+		"brightgreen":   "#a6b796",
+		"brightyellow":  "#d8cc72",
+		"brightblue":    "#9ab6c4",
+		"brightmagenta": "#cc8eb4",
+		"brightcyan":    "#8cbab2",
+		"brightwhite":   "#f5f2ec",
 	},
 }

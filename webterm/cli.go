@@ -20,6 +20,10 @@ func RunCLI(args []string) error {
 	landingManifest := ""
 	composeManifest := ""
 	dockerWatch := false
+	tmuxWatch := false
+	tmuxSession := DefaultTmuxSession
+	tmuxBinary := ""
+	tmuxSocket := ""
 	theme := DefaultTheme
 	fontFamily := ""
 	fontSize := DefaultFontSize
@@ -35,6 +39,10 @@ func RunCLI(args []string) error {
 	fs.StringVar(&composeManifest, "C", "", "Docker compose YAML; services with label \"webterm-command\" become landing tiles.")
 	fs.BoolVar(&dockerWatch, "docker-watch", false, "Watch Docker for containers with labels and add/remove sessions dynamically.")
 	fs.BoolVar(&dockerWatch, "D", false, "Watch Docker for containers with labels and add/remove sessions dynamically.")
+	fs.BoolVar(&tmuxWatch, "tmux-watch", false, "Watch a tmux session and add/remove one tile per window dynamically.")
+	fs.StringVar(&tmuxSession, "tmux-session", DefaultTmuxSession, "tmux session whose windows become tiles (with --tmux-watch).")
+	fs.StringVar(&tmuxBinary, "tmux-binary", "", "Path to the tmux binary (default: tmux on PATH; env WEBTERM_TMUX_BINARY).")
+	fs.StringVar(&tmuxSocket, "tmux-socket", "", "tmux socket path passed as -S (default: tmux default socket; env WEBTERM_TMUX_SOCKET).")
 	fs.StringVar(&theme, "theme", DefaultTheme, "Terminal color theme.")
 	fs.StringVar(&theme, "t", DefaultTheme, "Terminal color theme.")
 	fs.StringVar(&fontFamily, "font-family", "", "Terminal font family (CSS font stack).")
@@ -78,6 +86,20 @@ func RunCLI(args []string) error {
 		composeProject = filepath.Base(filepath.Dir(composeManifest))
 	}
 
+	// Env fallbacks for the deploy-time tmux values (handy when the binary and
+	// socket are fixed by the container, not the launch command).
+	if tmuxBinary == "" {
+		tmuxBinary = os.Getenv(TmuxBinaryEnv)
+	}
+	if tmuxSocket == "" {
+		tmuxSocket = os.Getenv(TmuxSocketEnv)
+	}
+	if tmuxSession == DefaultTmuxSession {
+		if env := strings.TrimSpace(os.Getenv(TmuxSessionEnv)); env != "" {
+			tmuxSession = env
+		}
+	}
+
 	server := NewLocalServer(config, ServerOptions{
 		Host:           host,
 		Port:           port,
@@ -88,11 +110,15 @@ func RunCLI(args []string) error {
 		ComposeMode:    composeMode,
 		ComposeProject: composeProject,
 		DockerWatch:    dockerWatch,
+		TmuxWatch:      tmuxWatch,
+		TmuxSession:    tmuxSession,
+		TmuxBinary:     tmuxBinary,
+		TmuxSocket:     tmuxSocket,
 	})
 
 	if command != "" {
 		server.sessionManager.AddApp("Terminal", command, "", true, "")
-	} else if !dockerWatch && len(landingApps) == 0 {
+	} else if !dockerWatch && !tmuxWatch && len(landingApps) == 0 {
 		shell := os.Getenv("SHELL")
 		if shell == "" {
 			shell = "/bin/sh"

@@ -439,6 +439,32 @@ const THEMES: Record<string, ITheme> = {
     brightCyan: "#33859e",
     brightWhite: "#99d1ce",
   },
+  // md — "Architectural Editorial" (dark), Matthew Dart personal brand.
+  // Source: handbook md-brand / OneDrive Personal Brand/terminal-theme.
+  md: {
+    background: "#1b1c1e",
+    foreground: "#f0ede6",
+    cursor: "#c4a84f",
+    cursorAccent: "#1b1c1e",
+    selectionBackground: "#34373b",
+    selectionForeground: "#f0ede6",
+    black: "#242628",
+    red: "#c96f4a",
+    green: "#8a9b7a",
+    yellow: "#c4a84f",
+    blue: "#7c99a8",
+    magenta: "#af7497",
+    cyan: "#6e9e96",
+    white: "#e8e1d4",
+    brightBlack: "#767a80",
+    brightRed: "#e08a63",
+    brightGreen: "#a6b796",
+    brightYellow: "#d8cc72",
+    brightBlue: "#9ab6c4",
+    brightMagenta: "#cc8eb4",
+    brightCyan: "#8cbab2",
+    brightWhite: "#f5f2ec",
+  },
 };
 
 

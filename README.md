@@ -86,6 +86,25 @@ Containers with these labels become tiles:
 
 Available themes: `tango`, `xterm`, `monokai`, `monokai-pro`, `ristretto`, `dark`, `light`, `dracula`, `catppuccin`, `nord`, `gruvbox`, `solarized`, `tokyo`, `miasma`, `github`, `gotham`
 
+### tmux watch (fork addition)
+
+Mirror the windows of a host tmux session as live tiles — one tile per window,
+added and removed as you create and close windows. See [`FORK.md`](FORK.md).
+
+```bash
+webterm --tmux-watch --tmux-session main
+```
+
+- `--tmux-session`: session whose windows become tiles (default `main`)
+- `--tmux-binary`: tmux binary to use (default `tmux` on `PATH`; env `WEBTERM_TMUX_BINARY`)
+- `--tmux-socket`: tmux socket path passed as `-S` (env `WEBTERM_TMUX_SOCKET`)
+- per-window theme: set the `@webterm-theme` window option (`tmux set -w @webterm-theme nord`)
+
+Each tile attaches a private grouped session focused on one window, so tiles are
+independent and never disturb your own client on the session. In a container, set
+`LANG=C.UTF-8` and point `--tmux-binary` at the host tmux via a read-only mount —
+see `FORK.md` for the full recipe.
+
 ### Compose manifest
 
 Use `prod.compose.yaml` as the canonical multi-session compose example:
@@ -102,6 +121,9 @@ go run ./cmd/webterm -- --compose-manifest ./prod.compose.yaml
 - `WEBTERM_SCREENSHOT_FORCE_REDRAW`: force redraw before screenshots (`true/1/yes/on`)
 - `WEBTERM_SCREENSHOT_MODE`: screenshot format for dashboard thumbnails (`png` default, set `svg` to use SVG)
 - `DOCKER_HOST`: Docker daemon endpoint override
+- `WEBTERM_TMUX_BINARY`: tmux binary for `--tmux-watch` (default `tmux` on `PATH`)
+- `WEBTERM_TMUX_SOCKET`: tmux socket path (`-S`) for `--tmux-watch`
+- `WEBTERM_TMUX_SESSION`: tmux session for `--tmux-watch` (default `main`)
 
 ## Development (Makefile-first)
 

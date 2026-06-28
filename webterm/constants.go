@@ -20,6 +20,13 @@ const (
 	DockerAutoCommandEnv     = "WEBTERM_DOCKER_AUTO_COMMAND"
 	DockerHostEnv            = "DOCKER_HOST"
 
+	TmuxBinaryEnv  = "WEBTERM_TMUX_BINARY"
+	TmuxSocketEnv  = "WEBTERM_TMUX_SOCKET"
+	TmuxSessionEnv = "WEBTERM_TMUX_SESSION"
+
+	DefaultTmuxSession = "main"
+	DefaultTmuxBinary  = "tmux"
+
 	AutoCommandSentinel = "__docker_exec__"
 )
 

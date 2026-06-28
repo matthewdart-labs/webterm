@@ -40,6 +40,8 @@ type ServerOptions struct {
 	Theme          string
 	FontFamily     string
 	FontSize       int
+	PaddingX       int
+	PaddingY       int
 	LandingApps    []App
 	ComposeMode    bool
 	ComposeProject string
@@ -175,6 +177,8 @@ type LocalServer struct {
 	theme      string
 	fontFamily string
 	fontSize   int
+	paddingX   int
+	paddingY   int
 	screenshotMode string
 
 	sessionManager *SessionManager
@@ -263,6 +267,8 @@ func NewLocalServer(config Config, options ServerOptions) *LocalServer {
 		theme:      theme,
 		fontFamily: options.FontFamily,
 		fontSize:   fontSize,
+		paddingX:   options.PaddingX,
+		paddingY:   options.PaddingY,
 		screenshotMode: screenshotMode,
 
 		sessionManager: NewSessionManager(apps),
@@ -1798,7 +1804,14 @@ func (s *LocalServer) handleRoot(w http.ResponseWriter, r *http.Request) {
 	escapedFont := strings.ReplaceAll(fontFamily, `"`, "&quot;")
 	dataAttrs := fmt.Sprintf(`data-session-websocket-url="%s" data-session-route-key="%s" data-session-name="%s" data-font-size="%d" data-scrollback="1000" data-theme="%s" data-font-family="%s"`, htmlAttrEscape(wsURL), htmlAttrEscape(routeKey), htmlAttrEscape(app.Name), s.fontSize, htmlAttrEscape(theme), escapedFont)
 	cacheBust := "?v=" + Version
-	page := fmt.Sprintf(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>%s</title><link rel="stylesheet" href="/static/monospace.css%s"><style>html,body{width:100%%;height:100%%}body{background:%s;margin:0;padding:0;overflow:hidden;font-family:var(--webterm-mono)}.webterm-terminal{width:100%%;height:100%%;display:block;overflow:hidden}</style></head><body><div id="terminal" class="webterm-terminal" %s></div><script type="module" src="/static/js/terminal.js%s"></script></body></html>`, htmlEscape(app.Name), cacheBust, themeBG, dataAttrs, cacheBust)
+	// Optional inset. box-sizing:border-box keeps the element at 100% of the
+	// viewport; the client fit logic reads the computed padding and shrinks the
+	// terminal grid accordingly. CSS order is vertical horizontal.
+	paddingCSS := ""
+	if s.paddingX > 0 || s.paddingY > 0 {
+		paddingCSS = fmt.Sprintf(";box-sizing:border-box;padding:%dpx %dpx", s.paddingY, s.paddingX)
+	}
+	page := fmt.Sprintf(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>%s</title><link rel="stylesheet" href="/static/monospace.css%s"><style>html,body{width:100%%;height:100%%}body{background:%s;margin:0;padding:0;overflow:hidden;font-family:var(--webterm-mono)}.webterm-terminal{width:100%%;height:100%%;display:block;overflow:hidden%s}</style></head><body><div id="terminal" class="webterm-terminal" %s></div><script type="module" src="/static/js/terminal.js%s"></script></body></html>`, htmlEscape(app.Name), cacheBust, themeBG, paddingCSS, dataAttrs, cacheBust)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	_, _ = io.WriteString(w, page)

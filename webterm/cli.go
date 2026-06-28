@@ -27,6 +27,8 @@ func RunCLI(args []string) error {
 	theme := DefaultTheme
 	fontFamily := ""
 	fontSize := DefaultFontSize
+	paddingX := 0
+	paddingY := 0
 	showVersion := false
 
 	fs.IntVar(&port, "port", DefaultPort, "Port for server.")
@@ -49,6 +51,8 @@ func RunCLI(args []string) error {
 	fs.StringVar(&fontFamily, "f", "", "Terminal font family (CSS font stack).")
 	fs.IntVar(&fontSize, "font-size", DefaultFontSize, "Terminal font size in pixels.")
 	fs.IntVar(&fontSize, "s", DefaultFontSize, "Terminal font size in pixels.")
+	fs.IntVar(&paddingX, "padding-x", 0, "Horizontal padding (px) inside the terminal viewport.")
+	fs.IntVar(&paddingY, "padding-y", 0, "Vertical padding (px) inside the terminal viewport.")
 	fs.BoolVar(&showVersion, "version", false, "Print version and exit.")
 	fs.BoolVar(&showVersion, "v", false, "Print version and exit.")
 
@@ -106,6 +110,8 @@ func RunCLI(args []string) error {
 		Theme:          theme,
 		FontFamily:     fontFamily,
 		FontSize:       fontSize,
+		PaddingX:       paddingX,
+		PaddingY:       paddingY,
 		LandingApps:    landingApps,
 		ComposeMode:    composeMode,
 		ComposeProject: composeProject,

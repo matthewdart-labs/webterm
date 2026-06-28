@@ -588,6 +588,81 @@ func TestRootTerminalPageAndSparklineValidation(t *testing.T) {
 	}
 }
 
+// TestSessionPageXSSNeutralized verifies that user-controlled values flowing
+// through the route_key query parameter are properly escaped in the rendered
+// session page and cannot introduce reflected XSS. The route_key flows into
+// data-session-route-key (HTML attribute) and data-session-websocket-url
+// (HTML attribute, as part of the ws:// URL path). Both contexts must escape
+// HTML special characters.
+func TestSessionPageXSSNeutralized(t *testing.T) {
+	_, httpServer, _ := newServerForTests(t, false)
+
+	cases := []struct {
+		name    string
+		payload string
+		// dangerous is a substring that must NOT appear unescaped in the response body.
+		dangerous string
+	}{
+		{
+			// Closing a quoted attribute then injecting a tag is the classic reflected
+			// XSS vector. CodeQL traces route_key → wsURL → data-session-websocket-url.
+			name:      "script_tag_via_attr_breakout",
+			payload:   `"><script>alert(1)</script>`,
+			dangerous: `<script>alert(1)</script>`,
+		},
+		{
+			// If the value reached the CSS <style> context it could break out of the
+			// block. route_key flows into data-session-route-key (attribute, not CSS),
+			// but the test guards against any future regression that puts it in CSS.
+			name:      "css_context_breakout",
+			payload:   `</style><script>alert(2)</script>`,
+			dangerous: `<script>alert(2)</script>`,
+		},
+		{
+			// Double-quote injection could introduce additional attributes on the
+			// terminal <div>. html/template escapes " → &#34; in attribute context.
+			name:      "quote_injection_in_attribute",
+			payload:   `" data-injected="evil`,
+			dangerous: `data-injected="evil`,
+		},
+		{
+			// Angle brackets in the value must be escaped so they cannot close the
+			// attribute, close the surrounding tag, or open new tags.
+			name:      "angle_bracket_tag_injection",
+			payload:   `abc</div><script>alert(3)</script>`,
+			dangerous: `<script>alert(3)</script>`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			url := httpServer.URL + "/?route_key=" + strings.NewReplacer(
+				" ", "%20", `"`, "%22", `<`, "%3C", `>`, "%3E", `/`, "%2F",
+			).Replace(tc.payload)
+			resp, err := http.Get(url)
+			if err != nil {
+				t.Fatalf("request failed: %v", err)
+			}
+			body, err := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			if err != nil {
+				t.Fatalf("read body: %v", err)
+			}
+			bodyStr := string(body)
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("expected 200, got %d; body: %s", resp.StatusCode, bodyStr)
+			}
+			if strings.Contains(bodyStr, tc.dangerous) {
+				t.Errorf("dangerous pattern %q found unescaped in response body", tc.dangerous)
+			}
+			// The raw unescaped payload must not appear verbatim in the output.
+			if strings.Contains(bodyStr, tc.payload) {
+				t.Errorf("raw payload %q appeared unescaped in response body", tc.payload)
+			}
+		})
+	}
+}
+
 func TestMarkRouteActivityBroadcastsWithoutBlockingGlobalLock(t *testing.T) {
 	server := NewLocalServer(Config{}, ServerOptions{})
 	ready := make(chan string, 1)

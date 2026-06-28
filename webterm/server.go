@@ -8,6 +8,7 @@ import (
 	"crypto/sha1"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net"
@@ -22,6 +23,48 @@ import (
 
 	"github.com/gorilla/websocket"
 )
+
+// sessionPageData holds the values interpolated into the session terminal page.
+// All string fields are HTML-escaped by html/template according to their context;
+// ThemeBG is pre-validated as a hex color from the static ThemeBackgrounds map
+// so it is marked template.CSS (safe CSS value). StylesheetHref and TerminalJSSrc
+// are server-generated paths (template.URL marks them as trusted relative URLs).
+type sessionPageData struct {
+	Title          string
+	StylesheetHref template.URL
+	ThemeBG        template.CSS
+	WSURL          string
+	RouteKey       string
+	AppName        string
+	FontSize       int
+	Theme          string
+	FontFamily     string
+	TerminalJSSrc  template.URL
+}
+
+// sessionPage is the html/template for the single-session terminal page.
+// html/template provides context-aware escaping: HTML attribute values,
+// the <title> text node, and the CSS <style> block are each escaped
+// according to their context, preventing reflected XSS from user input
+// such as the route_key query parameter.
+var sessionPage = template.Must(template.New("session").Parse(
+	`<!DOCTYPE html><html><head><meta charset="utf-8">` +
+		`<title>{{.Title}}</title>` +
+		`<link rel="stylesheet" href="{{.StylesheetHref}}">` +
+		`<style>html,body{width:100%;height:100%}body{background:{{.ThemeBG}};margin:0;padding:0;overflow:hidden;font-family:var(--webterm-mono)}.webterm-terminal{width:100%;height:100%;display:block;overflow:hidden}</style>` +
+		`</head><body>` +
+		`<div id="terminal" class="webterm-terminal"` +
+		` data-session-websocket-url="{{.WSURL}}"` +
+		` data-session-route-key="{{.RouteKey}}"` +
+		` data-session-name="{{.AppName}}"` +
+		` data-font-size="{{.FontSize}}"` +
+		` data-scrollback="1000"` +
+		` data-theme="{{.Theme}}"` +
+		` data-font-family="{{.FontFamily}}"` +
+		`></div>` +
+		`<script type="module" src="{{.TerminalJSSrc}}"></script>` +
+		`</body></html>`,
+))
 
 const (
 	wsSendQueueMax         = 256
@@ -1772,13 +1815,24 @@ func (s *LocalServer) handleRoot(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(fontFamily) == "" {
 		fontFamily = "var(--webterm-mono)"
 	}
-	escapedFont := strings.ReplaceAll(fontFamily, `"`, "&quot;")
-	dataAttrs := fmt.Sprintf(`data-session-websocket-url="%s" data-session-route-key="%s" data-session-name="%s" data-font-size="%d" data-scrollback="1000" data-theme="%s" data-font-family="%s"`, htmlAttrEscape(wsURL), htmlAttrEscape(routeKey), htmlAttrEscape(app.Name), s.fontSize, htmlAttrEscape(theme), escapedFont)
 	cacheBust := "?v=" + Version
-	page := fmt.Sprintf(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>%s</title><link rel="stylesheet" href="/static/monospace.css%s"><style>html,body{width:100%%;height:100%%}body{background:%s;margin:0;padding:0;overflow:hidden;font-family:var(--webterm-mono)}.webterm-terminal{width:100%%;height:100%%;display:block;overflow:hidden}</style></head><body><div id="terminal" class="webterm-terminal" %s></div><script type="module" src="/static/js/terminal.js%s"></script></body></html>`, htmlEscape(app.Name), cacheBust, themeBG, dataAttrs, cacheBust)
+	data := sessionPageData{
+		Title:          app.Name,
+		StylesheetHref: template.URL("/static/monospace.css" + cacheBust), //nolint:gosec // server-generated relative URL
+		ThemeBG:        template.CSS(themeBG),                             // always a hex constant from ThemeBackgrounds
+		WSURL:          wsURL,
+		RouteKey:       routeKey,
+		AppName:        app.Name,
+		FontSize:       s.fontSize,
+		Theme:          theme,
+		FontFamily:     fontFamily,
+		TerminalJSSrc:  template.URL("/static/js/terminal.js" + cacheBust), //nolint:gosec // server-generated relative URL
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = io.WriteString(w, page)
+	if err := sessionPage.Execute(w, data); err != nil {
+		log.Printf("session page render error: %v", err)
+	}
 }
 
 func htmlEscape(value string) string {

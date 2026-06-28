@@ -5,13 +5,18 @@ on:
   push:
     branches: [ main ]
 
+# Least privilege: this workflow only needs to read the repo. Pinning it here
+# means a fork PR's GITHUB_TOKEN stays read-only even if the org default changes.
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       # Prefer Makefile targets; this is intentionally generic.
       - name: Run checks

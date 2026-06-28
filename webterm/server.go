@@ -44,6 +44,10 @@ type ServerOptions struct {
 	ComposeMode    bool
 	ComposeProject string
 	DockerWatch    bool
+	TmuxWatch      bool
+	TmuxSession    string
+	TmuxBinary     string
+	TmuxSocket     string
 	StaticPath     string
 }
 
@@ -178,6 +182,10 @@ type LocalServer struct {
 	composeMode    bool
 	composeProject string
 	dockerWatch    bool
+	tmuxWatch      bool
+	tmuxSession    string
+	tmuxBinary     string
+	tmuxSocket     string
 	staticPath     string
 
 	upgrader websocket.Upgrader
@@ -192,6 +200,7 @@ type LocalServer struct {
 	slugToService         map[string]string
 	dockerStats           *DockerStatsCollector
 	dockerWatcher         *DockerWatcher
+	tmuxWatcher           *TmuxWatcher
 	screenshotForceRedraw bool
 }
 
@@ -261,6 +270,10 @@ func NewLocalServer(config Config, options ServerOptions) *LocalServer {
 		composeMode:    options.ComposeMode,
 		composeProject: options.ComposeProject,
 		dockerWatch:    options.DockerWatch,
+		tmuxWatch:      options.TmuxWatch,
+		tmuxSession:    options.TmuxSession,
+		tmuxBinary:     options.TmuxBinary,
+		tmuxSocket:     options.TmuxSocket,
 		staticPath:     options.StaticPath,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
@@ -1056,7 +1069,7 @@ func toIntFromQuery(value string, fallback int) int {
 
 func (s *LocalServer) dashboardTiles() []map[string]string {
 	var apps []App
-	if s.dockerWatch {
+	if s.dockerWatch || s.tmuxWatch {
 		apps = s.sessionManager.Apps()
 	} else {
 		apps = append([]App{}, s.landingApps...)
@@ -1118,7 +1131,7 @@ func (s *LocalServer) getWSURL(r *http.Request, routeKey string) string {
 
 func (s *LocalServer) handleRoot(w http.ResponseWriter, r *http.Request) {
 	routeKeyParam := r.URL.Query().Get("route_key")
-	showDashboard := (len(s.landingApps) > 0 || s.dockerWatch) && routeKeyParam == ""
+	showDashboard := (len(s.landingApps) > 0 || s.dockerWatch || s.tmuxWatch) && routeKeyParam == ""
 	if showDashboard {
 		tilesJSON, _ := json.Marshal(s.dashboardTiles())
 		composeModeJS := "false"
@@ -1128,6 +1141,10 @@ func (s *LocalServer) handleRoot(w http.ResponseWriter, r *http.Request) {
 		dockerWatchJS := "false"
 		if s.dockerWatch {
 			dockerWatchJS = "true"
+		}
+		tmuxWatchJS := "false"
+		if s.tmuxWatch {
+			tmuxWatchJS = "true"
 		}
 		screenshotEndpoint := "/screenshot.svg"
 		screenshotDownloadEndpoint := "/screenshot.svg"
@@ -1193,6 +1210,7 @@ func (s *LocalServer) handleRoot(w http.ResponseWriter, r *http.Request) {
 		let tiles = %s;
 		const composeMode = %s;
 		const dockerWatchMode = %s;
+		const tmuxWatchMode = %s;
 		const screenshotEndpoint = %q;
 		const screenshotDownloadEndpoint = %q;
 		const screenshotDownloadQuery = %q;
@@ -1676,13 +1694,18 @@ func (s *LocalServer) handleRoot(w http.ResponseWriter, r *http.Request) {
 				delete etagBySlug[key];
 			}
 			if (tiles.length === 0) {
-				grid.innerHTML = '<div class="empty">No containers found. Start containers with the webterm-command label.</div>';
-				subtitle.textContent = dockerWatchMode ? 'Watching for containers with webterm-command label...' : '';
+				const emptyText = dockerWatchMode
+					? 'No containers found. Start containers with the webterm-command label.'
+					: (tmuxWatchMode ? 'No tmux windows found yet.' : 'No sessions found.');
+				grid.innerHTML = '<div class="empty">' + emptyText + '</div>';
+				subtitle.textContent = dockerWatchMode
+					? 'Watching for containers with webterm-command label...'
+					: (tmuxWatchMode ? 'Watching tmux windows...' : '');
 				return;
 			}
 			subtitle.textContent = '';
-			if (dockerWatchMode) {
-				console.log(tiles.length + ' container(s) found');
+			if (dockerWatchMode || tmuxWatchMode) {
+				console.log(tiles.length + ' session(s) found');
 			}
 			for (const tile of tiles) {
 				const card = makeTile(tile);
@@ -1731,7 +1754,7 @@ func (s *LocalServer) handleRoot(w http.ResponseWriter, r *http.Request) {
 		}
 	</script>
 </body>
-</html>`, string(tilesJSON), composeModeJS, dockerWatchJS, screenshotEndpoint, screenshotDownloadEndpoint, screenshotDownloadQuery, screenshotDownloadExt)
+</html>`, string(tilesJSON), composeModeJS, dockerWatchJS, tmuxWatchJS, screenshotEndpoint, screenshotDownloadEndpoint, screenshotDownloadQuery, screenshotDownloadExt)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = io.WriteString(w, html)
 		return
@@ -1840,9 +1863,40 @@ func (s *LocalServer) setupDockerFeatures() {
 	}
 }
 
+func (s *LocalServer) setupTmuxFeatures() {
+	if !s.tmuxWatch {
+		return
+	}
+	watcher := NewTmuxWatcher(
+		s.sessionManager,
+		TmuxWatchConfig{
+			Session: s.tmuxSession,
+			Binary:  s.tmuxBinary,
+			Socket:  s.tmuxSocket,
+		},
+		func(slug, _, _ string) {
+			// A window was added or its label/theme changed — nudge the
+			// dashboard to re-pull /tiles (same channel the Docker watcher uses).
+			s.markRouteActivity("__dashboard__")
+		},
+		func(slug string) {
+			s.mu.Lock()
+			delete(s.screenshotCache, slug)
+			delete(s.screenshotPNGCache, slug)
+			s.mu.Unlock()
+			s.markRouteActivity("__dashboard__")
+		},
+	)
+	s.tmuxWatcher = watcher
+	watcher.Start()
+}
+
 func (s *LocalServer) shutdown() {
 	if s.dockerWatcher != nil {
 		s.dockerWatcher.Stop()
+	}
+	if s.tmuxWatcher != nil {
+		s.tmuxWatcher.Stop()
 	}
 	if s.dockerStats != nil {
 		s.dockerStats.Stop()
@@ -1909,6 +1963,7 @@ func (s *LocalServer) evictStaleScreenshots(ctx context.Context) {
 
 func (s *LocalServer) Run(ctx context.Context) error {
 	s.setupDockerFeatures()
+	s.setupTmuxFeatures()
 	go s.evictStaleScreenshots(ctx)
 	server := &http.Server{
 		Addr:    fmt.Sprintf("%s:%d", s.host, s.port),
